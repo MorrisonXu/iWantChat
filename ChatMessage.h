@@ -7,11 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
-
-typedef enum {
-    messageFrom=0,
-    messageTo
-} ChatMessageType;
+#import "ChatMessageBubbleFactory.h"
 
 @interface ChatMessage : NSObject
 

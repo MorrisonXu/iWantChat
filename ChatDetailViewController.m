@@ -8,24 +8,28 @@
 
 #import "ChatDetailViewController.h"
 
-typedef enum {
+typedef NS_ENUM(NSInteger, KeyboardShowState) {
     KeyboardShowStateNone=0,
     KeyboardShowStateFace,
     KeyboardShowStateMore,
     KeyboardShowStateRegular,
     KeyboardShowStateRecord,
-}EnumKeyboardShowState;
+};
 
 const static CGFloat toolbarHeight = 44;
 const static CGFloat toolbarWidth = 320; // from storyboard
 const static CGFloat faceKeyboardViewHeight = 196;
 
-@interface ChatDetailViewController () <UITextFieldDelegate, ChatFaceKeyboardViewDelegate, UITableViewDelegate, UITableViewDataSource>
+const static CGFloat minTextViewHeight = 36;
+const static CGFloat maxTextViewHeight = 3 * minTextViewHeight;
+
+@interface ChatDetailViewController () <UITextViewDelegate, /*UITextFieldDelegate,*/ ChatFaceKeyboardViewDelegate, UITableViewDelegate, UITableViewDataSource>
 {
-    NSInteger keybaordState;
+    NSInteger _keybaordState;
 //    CGRect *keyboardBound;
-//    NSNumber *duration;
-//    NSNumber *curve;
+    NSNumber *_duration;
+    NSNumber *_curve;
+    CGFloat _preMessageTextViewHeight;
 }
 
 // 通过 (UIButton *)recordButtonItem.customView; 获取Button
@@ -36,6 +40,7 @@ const static CGFloat faceKeyboardViewHeight = 196;
 
 @property (strong, nonatomic) UIBarButtonItem *speakButtonItem;
 @property (strong, nonatomic) UIBarButtonItem *messageFieldButtonItem;
+@property (strong, nonatomic) UIBarButtonItem *messageViewButtonItem;
 
 @property (strong, nonatomic) ChatFaceKeyboardView *faceKeyboardView;
 
@@ -94,20 +99,37 @@ const static CGFloat faceKeyboardViewHeight = 196;
     [moreButton addTarget:self action:@selector(moreMsgBIClicked:) forControlEvents:UIControlEventTouchUpInside];
     self.moreButtonItem = [[UIBarButtonItem alloc] initWithCustomView:moreButton];
     
-    // Text Field
-    CGFloat messageFieldWidth = toolbarWidth - 44 * 3;
-    UITextField *messageField = [[UITextField alloc] initWithFrame:CGRectMake(0, 0, messageFieldWidth, 44*0.8)];
-    [messageField setBorderStyle:UITextBorderStyleRoundedRect];
-    messageField.returnKeyType=UIReturnKeySend;
-//    messageField.font=[UIFont fontWithName:@"HelveticaNeue" size:18];
-    messageField.placeholder = @"请输入消息...";
-    messageField.delegate = self;
-    self.messageFieldButtonItem = [[UIBarButtonItem alloc] initWithCustomView:messageField];
+    // Text View
+//    CGFloat messageFieldWidth = toolbarWidth - 44 * 3;
+//    UITextField *messageField = [[UITextField alloc] initWithFrame:CGRectMake(0, 0, messageFieldWidth, 44*0.8)];
+//    [messageField setBorderStyle:UITextBorderStyleRoundedRect];
+//    messageField.returnKeyType=UIReturnKeySend;
+//    //messageField.font=[UIFont fontWithName:@"HelveticaNeue" size:18];
+//    messageField.placeholder = @"请输入消息...";
+//    messageField.delegate = self;
+//    self.messageFieldButtonItem = [[UIBarButtonItem alloc] initWithCustomView:messageField];
+    
+    CGFloat messageViewWidth = toolbarWidth - 44 * 3;
+    UITextView *messageView = [[UITextView alloc] initWithFrame:CGRectMake(0, 0, messageViewWidth, minTextViewHeight)];
+    messageView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
+    messageView.delegate = self;
+    messageView.backgroundColor = [UIColor clearColor];
+    messageView.font = [UIFont fontWithName:@"Helvetica" size:18];
+    //messageView.contentInset = UIEdgeInsetsMake(0, 5, 0, 5);
+    //messageView.scrollIndicatorInsets = UIEdgeInsetsMake(5, 0, 5, 0);
+    //messageView.textContainerInset = UIEdgeInsetsZero;
+    messageView.layer.borderColor = [UIColor colorWithWhite:0.8f alpha:1.0f].CGColor;
+    messageView.layer.borderWidth = 0.65f;
+    messageView.layer.cornerRadius = 6.0f;
+    
+    _preMessageTextViewHeight = [self getTextViewContentHeight:messageView];
+    self.messageViewButtonItem = [[UIBarButtonItem alloc] initWithCustomView:messageView];
+    
     
     // Record Message BI
     //UIButton *speakButton = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, messageFieldWidth, 44*0.8)];
     UIButton *speakButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    speakButton.frame = CGRectMake(0, 0, messageFieldWidth, 44*0.8);
+    speakButton.frame = CGRectMake(0, 0, messageViewWidth, 44*0.8);
     
     [speakButton.layer setMasksToBounds:YES];
     [speakButton.layer setBorderWidth:1.0];
@@ -144,7 +166,7 @@ const static CGFloat faceKeyboardViewHeight = 196;
     textFieldMargin.width = -9;
     
     // items中第一个按钮点击+移动才会改变背景图片，为什么？
-    NSArray *toolbarItems = [NSArray arrayWithObjects:marginRemover, self.recordButtonItem, textFieldMargin, self.messageFieldButtonItem, textFieldMargin, self.emojiButtonItem, marginRemover, self.moreButtonItem, marginRemover, nil];
+    NSArray *toolbarItems = [NSArray arrayWithObjects:marginRemover, self.recordButtonItem, textFieldMargin, self.messageViewButtonItem, textFieldMargin, self.emojiButtonItem, marginRemover, self.moreButtonItem, marginRemover, nil];
     self.chatBottomToolbar.items = toolbarItems;
 }
 
@@ -174,25 +196,44 @@ const static CGFloat faceKeyboardViewHeight = 196;
     // 实现键盘和语音按钮的切换
     [toolbarItems replaceObjectAtIndex:1 withObject:self.recordButtonItem];
     // 实现会话框的切换
-    [toolbarItems replaceObjectAtIndex:3 withObject:self.messageFieldButtonItem];
+//    [toolbarItems replaceObjectAtIndex:3 withObject:self.messageFieldButtonItem];
+    [toolbarItems replaceObjectAtIndex:3 withObject:self.messageViewButtonItem];
     
     self.chatBottomToolbar.items = toolbarItems;
     
     // 获取TextField焦点以调出回键盘
-    UITextField *messageField = (UITextField *)self.messageFieldButtonItem.customView;
-    [messageField becomeFirstResponder];
+//    UITextField *messageField = (UITextField *)self.messageFieldButtonItem.customView;
+//    [messageField becomeFirstResponder];
+    UITextView *messageView = (UITextView *)self.messageViewButtonItem.customView;
+    [messageView becomeFirstResponder];
 }
 
 - (void) emojiMsgBIClicked: (id) sender
 {
+    if(_keybaordState == KeyboardShowStateFace) {
+        [self multiKeyboardShowOrHide:KeyboardShowStateNone];
+        return;
+    }
+    // 不先收回普通键盘会导致布局的重叠，可能是应为动画重叠的原因
+    NSTimeInterval delay = (_keybaordState == KeyboardShowStateRegular) ? [_duration doubleValue] : 0;
+    
     // 隐藏键盘
-    UITextField *messageField = (UITextField *)self.messageFieldButtonItem.customView;
-    [messageField resignFirstResponder];
+//    UITextField *messageField = (UITextField *)self.messageFieldButtonItem.customView;
+//    [messageField resignFirstResponder];
+    UITextView *messageView = (UITextView *)self.messageViewButtonItem.customView;
+    [messageView resignFirstResponder];
     
     NSLog(@"emojiClicked", nil);
     
-    keybaordState = KeyboardShowStateFace;
     // 切换到表情视图键盘
+    _keybaordState = KeyboardShowStateFace;
+    [NSTimer scheduledTimerWithTimeInterval:delay target:self selector:@selector(showFaceKeyboard:) userInfo:nil repeats:NO];
+    //[self multiKeyboardShowOrHide:KeyboardShowStateFace];
+}
+
+- (void) showFaceKeyboard:(id)sender
+{
+    NSLog(@"showFaceKeyboard", nil);
     [self multiKeyboardShowOrHide:KeyboardShowStateFace];
 }
 
@@ -214,6 +255,11 @@ const static CGFloat faceKeyboardViewHeight = 196;
 - (void) sendButtonClicked: (id) sender
 {
     NSLog(@"view: sendButtonClicked", nil);
+}
+
+- (void) sendText:(NSString *)text
+{
+    
 }
 
 #pragma mark - Mulitiple Keyboard Manners - Show / Hide
@@ -306,17 +352,79 @@ const static CGFloat faceKeyboardViewHeight = 196;
      */
 }
 
-#pragma mark - UITextFieldDelegate
-// 点击发送完成输入
-- (BOOL) textFieldShouldReturn:(UITextField *) textField
+//#pragma mark - UITextFieldDelegate
+//// 点击发送完成输入
+//- (BOOL) textFieldShouldReturn:(UITextField *) textField
+//{
+////    UITextField *messageField = (UITextField *)self.messageFieldButtonItem.customView;
+////    // 取消TextField的焦点以缩回键盘
+////    [messageField resignFirstResponder];
+//    UITextView *messageView = (UITextView *)self.messageViewButtonItem.customView;
+//    // 取消TextField的焦点以缩回键盘
+//    [messageView resignFirstResponder];
+//    
+//    // 这里将message写到table view中
+//    
+//    return YES;
+//}
+//
+//-(BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string
+//{
+//    return YES;
+//}
+
+#pragma mark - UITextViewDelegate
+- (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text
 {
-    UITextField *messageField = (UITextField *)self.messageFieldButtonItem.customView;
-    // 取消TextField的焦点以缩回键盘
-    [messageField resignFirstResponder];
-    
-    // 这里将message写到table view中
-    
+    if([text isEqualToString:@"\n"]) {
+        if([self respondsToSelector:@selector(sendText:)]) {
+            [self sendText:textView.text];
+            UITextView *messageView = (UITextView *)self.messageViewButtonItem.customView;
+            messageView.text = @"";
+            [self changeTextViewToHeight:[self getTextViewContentHeight:messageView]];
+        }
+        return NO;
+    }
     return YES;
+}
+
+- (void)textViewDidChange:(UITextView *)textView
+{
+    [self changeTextViewToHeight:[self getTextViewContentHeight:textView]];
+}
+
+- (void)changeTextViewToHeight:(CGFloat)height
+{
+    height = (height < minTextViewHeight) ? minTextViewHeight : height;
+    height = (height > maxTextViewHeight) ? maxTextViewHeight : height;
+    
+    if (height == _preMessageTextViewHeight) {
+        return;
+    } else {
+        // 因为textView和toolbar的高度并不一致，所以用增量比较好
+        CGFloat heightToChange = height - _preMessageTextViewHeight;
+        CGRect toolbarFrameRect = self.chatBottomToolbar.frame;
+        toolbarFrameRect.origin.y -= heightToChange;
+        toolbarFrameRect.size.height += heightToChange;
+        self.chatBottomToolbar.frame = toolbarFrameRect;
+        
+//        UITextView *messageView = (UITextView *)self.messageViewButtonItem.customView;
+//        CGRect textViewFrameRect = messageView.frame;
+//        textViewFrameRect.size.height += heightToChange;
+//        messageView.frame = textViewFrameRect;
+        
+        CGRect tableViewFrameRect = self.chatDetailTableView.frame;
+        tableViewFrameRect.origin.y -= heightToChange;
+        self.chatDetailTableView.frame = tableViewFrameRect;
+        //scroll table to the bottom
+        
+        _preMessageTextViewHeight = height;
+    }
+}
+
+- (CGFloat)getTextViewContentHeight:(UITextView *)textView
+{
+    return ceilf([textView sizeThatFits:textView.frame.size].height);
 }
 
 #pragma mark - Keyboard Will/Hide Show Callback
@@ -324,7 +432,7 @@ const static CGFloat faceKeyboardViewHeight = 196;
 - (void) keyboardWillShow: (NSNotification *) notification
 {
     NSLog(@"keyboardWillShow", nil);
-    keybaordState = KeyboardShowStateRegular;
+    _keybaordState = KeyboardShowStateRegular;
     [self multiKeyboardShowOrHide:KeyboardShowStateNone];
     
     // 获取键盘边界Rect
@@ -333,8 +441,8 @@ const static CGFloat faceKeyboardViewHeight = 196;
     [keyboardBoundsValue getValue: &keyboardBounds];
     
     // 获取键盘弹出动画效果
-    NSNumber *duration = [notification.userInfo objectForKey:UIKeyboardAnimationDurationUserInfoKey];
-    NSNumber *curve = [notification.userInfo objectForKey:UIKeyboardAnimationCurveUserInfoKey];
+    _duration = [notification.userInfo objectForKey:UIKeyboardAnimationDurationUserInfoKey];
+    _curve = [notification.userInfo objectForKey:UIKeyboardAnimationCurveUserInfoKey];
     
     // 计算偏移量
     NSInteger offset = self.view.frame.size.height - keyboardBounds.origin.y;
@@ -346,8 +454,8 @@ const static CGFloat faceKeyboardViewHeight = 196;
     [UIView beginAnimations: @"moveUpViewWithKeyboard" context: NULL];
     [UIView setAnimationCurve: UIViewAnimationCurveEaseInOut];
     [UIView setAnimationBeginsFromCurrentState: YES];
-    [UIView setAnimationDuration: [duration doubleValue]];
-    [UIView setAnimationCurve:[curve intValue]];
+    [UIView setAnimationDuration: [_duration doubleValue]];
+    [UIView setAnimationCurve:[_curve intValue]];
     [UIView setAnimationDelegate:self];
     
     self.view.frame = listFrame;
@@ -357,12 +465,12 @@ const static CGFloat faceKeyboardViewHeight = 196;
 // 键盘隐藏时，将整个页面下移
 - (void) keyboardWillHide: (NSNotification *) notification
 {
-    keybaordState = KeyboardShowStateNone;
+    _keybaordState = KeyboardShowStateNone;
     NSLog(@"keyboardWillHide", nil);
     
     // 获取键盘收回动画效果
-    NSNumber *duration = [notification.userInfo objectForKey:UIKeyboardAnimationDurationUserInfoKey];
-    NSNumber *curve = [notification.userInfo objectForKey:UIKeyboardAnimationCurveUserInfoKey];
+    _duration = [notification.userInfo objectForKey:UIKeyboardAnimationDurationUserInfoKey];
+    _curve = [notification.userInfo objectForKey:UIKeyboardAnimationCurveUserInfoKey];
     
     // 计算新位置Rect
     CGRect listFrame = CGRectMake(0.0f, 0.0f, self.view.frame.size.width, self.view.frame.size.height);
@@ -370,8 +478,8 @@ const static CGFloat faceKeyboardViewHeight = 196;
     // 处理移动事件，将各视图设置最终要达到的状态，并执行键盘弹出动画
     [UIView beginAnimations: @"moveDownViewWithKeyboard" context: NULL];
     [UIView setAnimationBeginsFromCurrentState: YES];
-    [UIView setAnimationDuration: [duration doubleValue]];
-    [UIView setAnimationCurve: [curve intValue]];
+    [UIView setAnimationDuration: [_duration doubleValue]];
+    [UIView setAnimationCurve: [_curve intValue]];
     [UIView setAnimationDelegate: self];
     
     self.view.frame = listFrame;
@@ -382,8 +490,11 @@ const static CGFloat faceKeyboardViewHeight = 196;
 - (void)SendTheFaceString:(NSString *)faceString isDelete:(BOOL)del
 {
 //    NSLog(@"ChatDetailViewController: %@", faceString);
-    UITextField *messageField = (UITextField *)self.messageFieldButtonItem.customView;
-    messageField.text = [messageField.text stringByAppendingString:faceString];
+//    UITextField *messageField = (UITextField *)self.messageFieldButtonItem.customView;
+//    messageField.text = [messageField.text stringByAppendingString:faceString];
+    UITextView *messageView = (UITextView *)self.messageViewButtonItem.customView;
+    messageView.text = [messageView.text stringByAppendingString:faceString];
+    
     // TODO
 //    [self inputTextViewDidChange:messageField];
 }
@@ -394,8 +505,8 @@ const static CGFloat faceKeyboardViewHeight = 196;
     return 1;
 }
 
-//- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
-//{
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
 //    static NSString *CellIdentifier = @"ChatDetailListCell";
 //    ChatListTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier forIndexPath:indexPath];
 //    
@@ -407,7 +518,8 @@ const static CGFloat faceKeyboardViewHeight = 196;
 //    cell.chatName.text = @"派大星";
 //    cell.chatPreview.text = @"Hello！";
 //    return cell;
-//}
+    return nil;
+}
 
 
 

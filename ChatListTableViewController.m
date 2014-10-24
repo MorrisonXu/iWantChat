@@ -9,7 +9,9 @@
 #import "ChatListTableViewController.h"
 #import "ChatListTableViewCell.h"
 
-@interface ChatListTableViewController () <UITableViewDelegate,UITableViewDataSource>
+@interface ChatListTableViewController () <UITableViewDelegate,UITableViewDataSource> {
+    NSMutableArray *messageDataSource;
+}
 
 @end
 
@@ -18,6 +20,8 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view, typically from a nib.
+    
+    [messageDataSource initWithCapacity:0];
 }
 
 - (void)didReceiveMemoryWarning {
