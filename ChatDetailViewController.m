@@ -59,7 +59,6 @@ const static CGFloat maxTextViewHeight = 3 * minTextViewHeight;
     // 用于处理出现/隐藏键盘时各个空间的重排
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillChange:) name:UIKeyboardWillChangeFrameNotification object:nil];
     
     _keybaordState = KeyboardShowStateNone;
     
@@ -310,9 +309,15 @@ const static CGFloat maxTextViewHeight = 3 * minTextViewHeight;
 - (void)textViewDidChange:(UITextView *)textView
 {
     [self changeTextViewToHeight:[self getTextViewContentHeight:textView]];
-    
-    UITextView *messageView = (UITextView *)self.messageViewButtonItem.customView;
-    [messageView scrollRangeToVisible:NSMakeRange([messageView.text length] - 1, 1)];
+    [self scrollToCaretInTextView:textView animated:NO];
+    //[messageView scrollRangeToVisible:NSMakeRange([messageView.text length] - 1, 1)];
+}
+
+- (void)scrollToCaretInTextView:(UITextView *)textView animated:(BOOL)animated
+{
+    CGRect rect = [textView caretRectForPosition:textView.selectedTextRange.end];
+    rect.size.height += textView.textContainerInset.bottom;
+    [textView scrollRectToVisible:rect animated:animated];
 }
 
 - (void)changeTextViewToHeight:(CGFloat)height
@@ -360,11 +365,6 @@ const static CGFloat maxTextViewHeight = 3 * minTextViewHeight;
 }
 
 #pragma mark - Keyboard Will/Hide Show Callback
-- (void)keyboardWillChange:(NSNotification *) notification
-{
-    NSLog(@"keyboardWillChange", nil);
-}
-
 // 键盘弹出时，将整个页面上抬
 - (void) keyboardWillShow: (NSNotification *) notification
 {
@@ -395,8 +395,8 @@ const static CGFloat maxTextViewHeight = 3 * minTextViewHeight;
     UITextView *messageView = (UITextView *)self.messageViewButtonItem.customView;
     messageView.text = [messageView.text stringByAppendingString:faceString];
     
-    // TODO
-//    [self inputTextViewDidChange:messageField];
+    [self changeTextViewToHeight:[self getTextViewContentHeight:messageView]];
+    [self scrollToCaretInTextView:messageView animated:NO];
 }
 
 #pragma mark - UITableView Delegates
